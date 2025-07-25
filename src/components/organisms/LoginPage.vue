@@ -1,60 +1,34 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/authStore'
 
 const router = useRouter()
+const authStore = useAuthStore()
+
 const email = ref('')
 const password = ref('')
 const rememberMe = ref(false)
-const error = ref('')
+
+// Computed properties from store
+const isLoading = computed(() => authStore.isLoading)
+const error = computed(() => authStore.error)
 
 const handleLogin = async () => {
   try {
-    error.value = ''
-    
-    // Development fixed credentials
-    const STUDENT_EMAIL = 'dev@numera.com'
-    const STUDENT_PASSWORD = 'password123'
-    const ADMIN_EMAIL = 'admin@numera.com'
-    const ADMIN_PASSWORD = 'admin123'
-    
-    let devUser = null
-    
-    if (email.value === STUDENT_EMAIL && password.value === STUDENT_PASSWORD) {
-      devUser = {
-        id: 'dev-student-001',
-        name: 'John Doe',
-        email: STUDENT_EMAIL,
-        role: 'student',
-        subscriptionPlan: 'free',
-        loginTime: new Date().toISOString()
-      }
-    } else if (email.value === ADMIN_EMAIL && password.value === ADMIN_PASSWORD) {
-      devUser = {
-        id: 'dev-admin-001',
-        name: 'Admin User',
-        email: ADMIN_EMAIL,
-        role: 'admin',
-        subscriptionPlan: 'premium', // Admins get premium by default
-        loginTime: new Date().toISOString()
-      }
-    }
-    
-    if (devUser) {
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 500))
-    
-      // Store authentication token in localStorage for development
-      localStorage.setItem('authToken', 'dev-token-12345')
-      localStorage.setItem('currentUser', JSON.stringify(devUser))
-      
-      // Redirect to subject selection
+    // Try API login first, fallback to development login
+    try {
+      await authStore.login({ email: email.value, password: password.value })
       router.push('/app/subjects')
-    } else {
-      error.value = 'Invalid credentials. Use the provided development credentials above.'
+    } catch (apiError) {
+      console.warn('API login failed, trying development login:', apiError)
+      
+      // Fallback to development login
+      await authStore.devLogin(email.value, password.value)
+      router.push('/app/subjects')
     }
-  } catch (err) {
-    error.value = 'Login failed. Please try again.'
+  } catch (err: any) {
+    console.error('Login failed:', err)
   }
 }
 
@@ -157,15 +131,23 @@ const navigateToRegister = () => {
           <div>
             <button
               type="submit"
-              class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              :disabled="isLoading"
+              class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Sign in
+              <span v-if="isLoading" class="flex items-center">
+                <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Signing in...
+              </span>
+              <span v-else>Sign in</span>
             </button>
           </div>
         </form>
 
-        <div v-if="error" class="mt-4 text-red-600 text-sm text-center">
-          {{ error }}
+        <div v-if="error" class="mt-4 p-3 bg-red-50 border border-red-200 rounded-md">
+          <p class="text-red-600 text-sm text-center">{{ error }}</p>
         </div>
       </div>
     </div>

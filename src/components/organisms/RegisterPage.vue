@@ -1,34 +1,59 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/authStore'
+import { useLoading } from '@/composables/useLoading'
+import { useErrorHandler } from '@/utils/errorHandler'
 
 const router = useRouter()
+const authStore = useAuthStore()
+const loading = useLoading('register')
+const errorHandler = useErrorHandler()
+
 const firstName = ref('')
 const lastName = ref('')
 const email = ref('')
 const password = ref('')
 const confirmPassword = ref('')
-const error = ref('')
+
+// Computed properties from store
+const isLoading = computed(() => loading.isLoading)
+const error = computed(() => authStore.error)
 
 const handleRegister = async () => {
   try {
+    // Validate passwords match
     if (password.value !== confirmPassword.value) {
-      error.value = 'Passwords do not match'
+      authStore.error = 'Passwords do not match'
       return
     }
 
-    // TODO: Implement actual registration logic here
-    console.log('Registration attempt:', {
-      firstName: firstName.value,
-      lastName: lastName.value,
+    // Validate password strength
+    if (password.value.length < 8) {
+      authStore.error = 'Password must be at least 8 characters long'
+      return
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(email.value)) {
+      authStore.error = 'Please enter a valid email address'
+      return
+    }
+
+    // Register user
+    await authStore.register({
+      name: `${firstName.value} ${lastName.value}`,
       email: email.value,
-      password: password.value
+      password: password.value,
+      role: 'student'
     })
-    
-    // For now, just redirect to dashboard
-    router.push('/dashboard')
-  } catch (err) {
-    error.value = 'Registration failed'
+
+    // Redirect to subject selection on success
+    router.push('/app/subjects')
+  } catch (err: any) {
+    console.error('Registration failed:', err)
+    // Error is already set in the store
   }
 }
 
@@ -142,15 +167,23 @@ const navigateToLogin = () => {
           <div>
             <button
               type="submit"
-              class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              :disabled="isLoading.value"
+              class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Create account
+              <span v-if="isLoading" class="flex items-center">
+                <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Creating account...
+              </span>
+              <span v-else>Create account</span>
             </button>
           </div>
         </form>
 
-        <div v-if="error" class="mt-4 text-red-600 text-sm text-center">
-          {{ error }}
+        <div v-if="error" class="mt-4 p-3 bg-red-50 border border-red-200 rounded-md">
+          <p class="text-red-600 text-sm text-center">{{ error }}</p>
         </div>
       </div>
     </div>

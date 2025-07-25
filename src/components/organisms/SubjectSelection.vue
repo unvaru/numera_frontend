@@ -1,10 +1,17 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useSubjectStore } from '@/stores/subjectStore'
+import { useLoading } from '@/composables/useLoading'
+import { useErrorHandler } from '@/utils/errorHandler'
 import Button from '../atoms/Button.vue'
 
 const router = useRouter()
+const subjectStore = useSubjectStore()
+const loading = useLoading('subjects')
+const errorHandler = useErrorHandler()
 
+// Enhanced subject interface with API data
 interface Subject {
   id: string
   title: string
@@ -22,69 +29,76 @@ interface Subject {
   lastAccessed?: string
 }
 
-// Sample subjects data - in real app this would come from API
-const subjects = ref<Subject[]>([
-  {
-    id: 'accounting',
-    title: 'Accounting',
-    description: 'Master the fundamentals of financial accounting, from basic bookkeeping to preparing financial statements.',
-    code: 'ACC',
-    icon: ['fas', 'calculator'],
-    color: 'text-green-600',
-    bgColor: 'bg-green-50',
-    totalTopics: 12,
-    totalLessons: 45,
-    estimatedHours: 60,
-    difficulty: 'Intermediate',
-    userProgress: 45,
-    lastAccessed: '2024-01-25'
-  },
-  {
-    id: 'economics',
-    title: 'Economics',
-    description: 'Understand economic principles, market dynamics, and how economies function at micro and macro levels.',
-    code: 'ECO',
-    icon: ['fas', 'chart-line'],
-    color: 'text-blue-600',
-    bgColor: 'bg-blue-50',
-    totalTopics: 10,
-    totalLessons: 38,
-    estimatedHours: 50,
-    difficulty: 'Intermediate',
-    userProgress: 0,
-    isComingSoon: true
-  },
-  {
-    id: 'business-studies',
-    title: 'Business Studies',
-    description: 'Learn about business operations, management principles, marketing, and entrepreneurship.',
-    code: 'BUS',
-    icon: ['fas', 'briefcase'],
-    color: 'text-purple-600',
-    bgColor: 'bg-purple-50',
-    totalTopics: 8,
-    totalLessons: 32,
-    estimatedHours: 45,
-    difficulty: 'Beginner',
-    userProgress: 0,
-    isComingSoon: true
-  },
-  {
-    id: 'mathematics',
-    title: 'Mathematics',
-    description: 'Strengthen your mathematical foundation with topics essential for business and economics.',
-    code: 'MAT',
-    icon: ['fas', 'square-root-variable'],
-    color: 'text-orange-600',
-    bgColor: 'bg-orange-50',
-    totalTopics: 15,
-    totalLessons: 55,
-    estimatedHours: 70,
-    difficulty: 'Advanced',
-    userProgress: 0,
-    isComingSoon: true
+// Transform API subjects to UI subjects
+const transformApiSubject = (apiSubject: any): Subject => {
+  const subjectMap: Record<string, Subject> = {
+    'accounting-001': {
+      id: 'accounting',
+      title: 'Accounting',
+      description: apiSubject.description || 'Master the fundamentals of financial accounting, from basic bookkeeping to preparing financial statements.',
+      code: 'ACC',
+      icon: ['fas', 'calculator'],
+      color: 'text-green-600',
+      bgColor: 'bg-green-50',
+      totalTopics: 12,
+      totalLessons: 45,
+      estimatedHours: 60,
+      difficulty: 'Intermediate',
+      userProgress: 45,
+      lastAccessed: '2024-01-25'
+    },
+    'economics-001': {
+      id: 'economics',
+      title: 'Economics',
+      description: apiSubject.description || 'Understand economic principles, market dynamics, and how economies function at micro and macro levels.',
+      code: 'ECO',
+      icon: ['fas', 'chart-line'],
+      color: 'text-blue-600',
+      bgColor: 'bg-blue-50',
+      totalTopics: 10,
+      totalLessons: 38,
+      estimatedHours: 50,
+      difficulty: 'Intermediate',
+      userProgress: 0,
+      isComingSoon: true
+    },
+    'business-001': {
+      id: 'business-studies',
+      title: 'Business Studies',
+      description: apiSubject.description || 'Learn about business operations, management principles, marketing, and entrepreneurship.',
+      code: 'BUS',
+      icon: ['fas', 'briefcase'],
+      color: 'text-purple-600',
+      bgColor: 'bg-purple-50',
+      totalTopics: 8,
+      totalLessons: 32,
+      estimatedHours: 45,
+      difficulty: 'Beginner',
+      userProgress: 0,
+      isComingSoon: true
+    }
   }
-])
+
+  return subjectMap[apiSubject.id] || {
+    id: apiSubject.id,
+    title: apiSubject.title,
+    description: apiSubject.description,
+    code: apiSubject.id.substring(0, 3).toUpperCase(),
+    icon: ['fas', 'book'],
+    color: 'text-gray-600',
+    bgColor: 'bg-gray-50',
+    totalTopics: 0,
+    totalLessons: 0,
+    estimatedHours: 0,
+    difficulty: 'Beginner',
+    userProgress: 0
+  }
+}
+
+// Subjects from store
+const subjects = computed(() => {
+  return subjectStore.subjects.map(transformApiSubject)
+})
 
 const searchQuery = ref('')
 const selectedDifficulty = ref('All Levels')
@@ -121,6 +135,19 @@ const getDifficultyColor = (difficulty: string) => {
       return 'text-gray-600 bg-gray-50'
   }
 }
+
+// Load subjects on mount
+onMounted(async () => {
+  try {
+    loading.startLoading('Loading subjects...')
+    await subjectStore.fetchSubjects()
+  } catch (error) {
+    const appError = errorHandler.handleError(error)
+    console.error('Failed to load subjects:', appError)
+  } finally {
+    loading.stopLoading()
+  }
+})
 
 const selectSubject = (subject: Subject) => {
   if (subject.isComingSoon) {
@@ -229,8 +256,32 @@ const continueLearning = () => {
         </div>
       </div>
 
+      <!-- Loading State -->
+      <div v-if="loading.isLoading" class="flex items-center justify-center py-12">
+        <div class="text-center">
+          <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto"></div>
+          <p class="mt-4 text-gray-600">{{ loading.message }}</p>
+        </div>
+      </div>
+
+      <!-- Error State -->
+      <div v-else-if="subjectStore.error" class="flex items-center justify-center py-12">
+        <div class="text-center">
+          <div class="text-red-500 text-6xl mb-4">⚠️</div>
+          <h3 class="text-lg font-semibold text-gray-900 mb-2">Failed to load subjects</h3>
+          <p class="text-gray-600 mb-4">{{ subjectStore.error }}</p>
+          <Button
+            variant="primary"
+            @click="subjectStore.fetchSubjects"
+            class="bg-green-600 hover:bg-green-700"
+          >
+            Try Again
+          </Button>
+        </div>
+      </div>
+
       <!-- Subjects Grid -->
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <div
           v-for="subject in filteredSubjects"
           :key="subject.id"

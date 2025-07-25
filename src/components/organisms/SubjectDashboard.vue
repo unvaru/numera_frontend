@@ -1,12 +1,18 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useSubjectStore } from '@/stores/subjectStore'
+import { useLoading } from '@/composables/useLoading'
+import { useErrorHandler } from '@/utils/errorHandler'
 import Button from '../atoms/Button.vue'
 import Card from '../molecules/Card.vue'
 import UsageLimitTracker from '../molecules/UsageLimitTracker.vue'
 
 const route = useRoute()
 const router = useRouter()
+const subjectStore = useSubjectStore()
+const loading = useLoading('subject-dashboard')
+const errorHandler = useErrorHandler()
 
 interface Subject {
   id: string
@@ -63,31 +69,22 @@ interface Achievement {
   isEarned: boolean
 }
 
-// Current subject from route params or localStorage
+// Current subject from route params
 const subjectId = ref(route.params.subjectId as string)
-const currentSubject = ref<Subject | null>(null)
-
-// Sample data - in real app this would come from API
-const subjectData = {
-  accounting: {
-    id: 'accounting',
-    title: 'Accounting',
-    description: 'Master the fundamentals of financial accounting',
-    code: 'ACC',
-    icon: ['fas', 'calculator'],
+const currentSubject = computed(() => {
+  const apiSubject = subjectStore.getSubjectById(subjectId.value)
+  if (!apiSubject) return null
+  
+  return {
+    id: apiSubject.id,
+    title: apiSubject.title,
+    description: apiSubject.description,
+    code: apiSubject.id.substring(0, 3).toUpperCase(),
+    icon: ['fas', 'calculator'], // Default icon
     color: 'text-green-600',
     bgColor: 'bg-green-50'
-  },
-  economics: {
-    id: 'economics',
-    title: 'Economics',
-    description: 'Understand economic principles and market dynamics',
-    code: 'ECO',
-    icon: ['fas', 'chart-line'],
-    color: 'text-blue-600',
-    bgColor: 'bg-blue-50'
   }
-}
+})
 
 const progress = ref<SubjectProgress>({
   overallProgress: 45,
@@ -270,16 +267,30 @@ const continueNext = () => {
 }
 
 // Load subject data
-onMounted(() => {
-  // Get subject from localStorage or API
-  const stored = localStorage.getItem('selectedSubject')
-  if (stored) {
-    currentSubject.value = JSON.parse(stored)
-  } else if (subjectData[subjectId.value as keyof typeof subjectData]) {
-    currentSubject.value = subjectData[subjectId.value as keyof typeof subjectData]
-  } else {
-    // Redirect to subject selection if no valid subject
-    router.push('/app/subjects')
+onMounted(async () => {
+  try {
+    loading.startLoading('Loading subject data...')
+    
+    // Load subjects if not already loaded
+    if (subjectStore.subjects.length === 0) {
+      await subjectStore.fetchSubjects()
+    }
+    
+    // Load topics for current subject
+    if (subjectId.value) {
+      await subjectStore.fetchTopicsBySubject(subjectId.value)
+    }
+    
+    // Check if subject exists
+    if (!currentSubject.value) {
+      router.push('/app/subjects')
+      return
+    }
+  } catch (error) {
+    const appError = errorHandler.handleError(error)
+    console.error('Failed to load subject dashboard:', appError)
+  } finally {
+    loading.stopLoading()
   }
 })
 </script>
@@ -332,7 +343,32 @@ onMounted(() => {
       </div>
     </div>
 
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Loading State -->
+    <div v-if="loading.isLoading" class="flex items-center justify-center py-12">
+      <div class="text-center">
+        <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto"></div>
+        <p class="mt-4 text-gray-600">{{ loading.message }}</p>
+      </div>
+    </div>
+
+    <!-- Error State -->
+    <div v-else-if="subjectStore.error" class="flex items-center justify-center py-12">
+      <div class="text-center">
+        <div class="text-red-500 text-6xl mb-4">⚠️</div>
+        <h3 class="text-lg font-semibold text-gray-900 mb-2">Failed to load dashboard</h3>
+        <p class="text-gray-600 mb-4">{{ subjectStore.error }}</p>
+        <Button
+          variant="primary"
+          @click="subjectStore.fetchSubjects"
+          class="bg-green-600 hover:bg-green-700"
+        >
+          Try Again
+        </Button>
+      </div>
+    </div>
+
+    <!-- Dashboard Content -->
+    <div v-else class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <!-- Usage Limit Tracker -->
       <UsageLimitTracker 
         variant="dashboard" 

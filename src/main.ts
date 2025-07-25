@@ -1,48 +1,130 @@
 import './assets/main.css'
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
-import App from './App.vue'
 import router from './router'
+import App from './App.vue'
 
 // Vuetify
 import 'vuetify/styles'
 import { createVuetify } from 'vuetify'
 import * as components from 'vuetify/components'
 import * as directives from 'vuetify/directives'
+import '@mdi/font/css/materialdesignicons.css'
 
 // Font Awesome
-import { library } from '@fortawesome/fontawesome-svg-core'
-import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome'
-import { fas } from '@fortawesome/free-solid-svg-icons'
+import '@fortawesome/fontawesome-free/css/all.css'
 
-// Material Symbols
-import '@fontsource/material-symbols-outlined'
+// Tailwind CSS
+import './style.css'
 
-// Axios
-import axios from 'axios'
-import VueAxios from 'vue-axios'
+// Initialize stores
+import { useAuthStore } from './stores/authStore'
 
-// Vue Click Outside
-import vClickOutside from 'v-click-outside'
+// Initialize monitoring
+import monitoring from './utils/monitoring'
 
-// Configure Vuetify
+// Create Vuetify instance
 const vuetify = createVuetify({
   components,
   directives,
+  theme: {
+    defaultTheme: 'light'
+  }
 })
 
-// Configure Font Awesome
-library.add(fas)
+// Create Pinia instance
+const pinia = createPinia()
 
+// Create Vue app
 const app = createApp(App)
 
-app.use(createPinia())
+// Use plugins
+app.use(pinia)
 app.use(router)
 app.use(vuetify)
-app.use(VueAxios, axios)
-app.use(vClickOutside)
 
-// Register Font Awesome component globally
-app.component('font-awesome-icon', FontAwesomeIcon)
+// Initialize auth store
+const authStore = useAuthStore()
 
+// Initialize monitoring services
+async function initializeApp() {
+  try {
+    // Initialize monitoring first
+    await monitoring.initialize()
+
+    // Initialize auth store
+    await authStore.initializeAuth()
+
+    // Set user in monitoring if authenticated
+    if (authStore.user) {
+      monitoring.setUser(authStore.user)
+    }
+
+    // Track app initialization
+    monitoring.trackEvent('app_initialized', {
+      environment: import.meta.env.VITE_APP_ENVIRONMENT,
+      version: import.meta.env.VITE_APP_VERSION
+    })
+
+    console.log('✅ Application initialized successfully')
+  } catch (error) {
+    console.error('❌ Failed to initialize application:', error)
+    
+    // Track initialization error
+    monitoring.trackError({
+      type: 'UNKNOWN' as any,
+      severity: 'HIGH' as any,
+      message: 'Application initialization failed',
+      details: { error: (error as Error).message }
+    })
+  }
+}
+
+// Initialize application
+initializeApp()
+
+// Mount app
 app.mount('#app')
+
+// Track page views on route changes
+router.afterEach((to) => {
+  monitoring.trackPageView(to.path)
+})
+
+// Handle unhandled errors
+window.addEventListener('error', (event) => {
+  monitoring.trackError({
+    type: 'UNHANDLED_ERROR',
+    severity: 'HIGH',
+    message: event.error?.message || 'Unhandled error',
+    details: {
+      filename: event.filename,
+      lineno: event.lineno,
+      colno: event.colno,
+      error: event.error
+    }
+  })
+})
+
+// Handle unhandled promise rejections
+window.addEventListener('unhandledrejection', (event) => {
+  monitoring.trackError({
+    type: 'UNHANDLED_REJECTION',
+    severity: 'HIGH',
+    message: 'Unhandled promise rejection',
+    details: {
+      reason: event.reason
+    }
+  })
+})
+
+// Handle beforeunload for analytics
+window.addEventListener('beforeunload', () => {
+  // Track session end
+  monitoring.trackEvent('session_end', {
+    duration: performance.now()
+  })
+})
+
+// Export for testing
+export { app, router, pinia }

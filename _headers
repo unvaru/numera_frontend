@@ -1,0 +1,58 @@
+# Security Headers
+/*
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  X-XSS-Protection: 1; mode=block
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
+  Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
+
+# Content Security Policy
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://cdn.mxpnl.com https://browser.sentry-cdn.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://api.penstip.com https://www.google-analytics.com https://api.mixpanel.com https://o450000000000000.ingest.sentry.io; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none';
+
+# Cache static assets for 1 year
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Cache images for 1 year
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+*.ico
+*.webp
+  Cache-Control: public, max-age=31536000, immutable
+
+# Cache fonts for 1 year
+*.woff
+*.woff2
+*.eot
+*.ttf
+*.otf
+  Cache-Control: public, max-age=31536000, immutable
+
+# Cache CSS and JS for 1 year
+*.css
+*.js
+  Cache-Control: public, max-age=31536000, immutable
+
+# No cache for HTML files
+*.html
+  Cache-Control: no-cache, no-store, must-revalidate
+
+# Service worker - no cache
+/sw.js
+  Cache-Control: public, max-age=0, must-revalidate
+
+# Manifest file - cache for 1 day
+/manifest.json
+  Cache-Control: public, max-age=86400
+
+# API routes - no cache
+/api/*
+  Cache-Control: no-cache, no-store, must-revalidate
+  Access-Control-Allow-Origin: https://penstip.com
+  Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS
+  Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With 
